@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>CPF CRM — Kamphaeng Phet</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f0f2f7;--surface:#fff;--bd:#e4e7ef;--bd2:#d0d5e0;
+  --text:#1a1d2e;--t2:#5a6072;--t3:#9aa0b4;
+  --shadow:0 2px 12px rgba(0,0,0,.08);
+  --top-h:58px;--nav-h:62px;
+  --chicken:#f59e0b;--pork:#ef4444;--shrimp:#f97316;--egg:#84cc16;
+}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;color:var(--text);background:var(--bg)}
+
+/* ── LOADING ── */
+#loading{position:fixed;inset:0;background:var(--surface);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes dropPin{from{transform:translateY(-30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ── PRODUCT SELECTOR ── */
+#product-selector{position:fixed;inset:0;background:linear-gradient(135deg,#1a1d2e 0%,#2d3250 100%);z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:24px}
+#product-selector h1{color:#fff;font-size:28px;font-weight:800;text-align:center;letter-spacing:-1px}
+#product-selector p{color:rgba(255,255,255,.6);font-size:14px;text-align:center}
+.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:380px}
+.product-card{background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.12);border-radius:16px;padding:20px 16px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;transition:all .2s;color:#fff}
+.product-card:hover,.product-card:active{transform:scale(.97)}
+.product-card.selected{border-color:currentColor;background:rgba(255,255,255,.15)}
+.product-card .emoji{font-size:36px}
+.product-card .name{font-size:15px;font-weight:700}
+.product-card .count{font-size:11px;opacity:.6;font-family:'Space Mono',monospace}
+.product-card[data-product="Chicken"]{color:var(--chicken)}
+.product-card[data-product="Pork"]{color:var(--pork)}
+.product-card[data-product="Shrimp"]{color:var(--shrimp)}
+.product-card[data-product="Egg"]{color:var(--egg)}
+#btn-enter-app{width:100%;max-width:380px;height:52px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:none;transition:all .2s}
+#btn-enter-app:active{transform:scale(.97)}
+#btn-all-view{color:rgba(255,255,255,.5);font-size:13px;border:none;background:none;cursor:pointer;font-family:'Inter',sans-serif;margin-top:-8px;text-decoration:underline}
+
+/* ── TOP BAR ── */
+#topbar{height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--bd);box-shadow:0 1px 8px rgba(0,0,0,.06);position:relative;z-index:200;flex-shrink:0}
+.product-badge{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:none;color:#fff;transition:opacity .15s}
+.product-badge:active{opacity:.8}
+.product-badge .badge-emoji{font-size:18px}
+.spacer{flex:1}
+.top-btn{width:34px;height:34px;border:none;background:var(--bg);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--t2);cursor:pointer;flex-shrink:0;transition:background .15s}
+.top-btn:hover,.top-btn:active{background:var(--bd)}
+#search-wrap{flex:1;max-width:260px;position:relative}
+#search-inp{width:100%;height:34px;border:1.5px solid var(--bd);border-radius:20px;padding:0 30px 0 12px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);color:var(--text);transition:border .2s}
+#search-inp:focus{border-color:var(--accent);background:#fff}
+.search-ico{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--t3);pointer-events:none}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:calc(100vh - var(--top-h));position:relative;overflow:hidden}
+
+/* ── MAIN CONTENT AREA ── */
+#main-content{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+/* ── VIEW TABS ── */
+.view-tabs{display:flex;gap:0;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--bd);flex-shrink:0}
+.view-tab{height:42px;padding:0 16px;border:none;background:none;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;display:flex;align-items:center;gap:6px}
+.view-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── CRM VIEW ── */
+#view-crm{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.crm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-shrink:0}
+.crm-title{font-size:18px;font-weight:800;color:var(--text)}
+.crm-sub{font-size:12px;color:var(--t3);margin-top:2px}
+.customer-card{background:var(--surface);border-radius:14px;border:1.5px solid var(--bd);padding:14px;cursor:pointer;transition:border .15s,box-shadow .15s;position:relative;overflow:hidden}
+.customer-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.customer-card:active{transform:scale(.99)}
+.customer-card-top{display:flex;align-items:flex-start;gap:12px}
+.customer-avatar{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.customer-name{font-size:15px;font-weight:700;color:var(--text)}
+.customer-meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+.channel-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff}
+.customer-addr{font-size:11px;color:var(--t3);margin-top:3px}
+.visit-strip{margin-top:10px;display:flex;gap:6px;align-items:center}
+.next-visit-chip{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;display:flex;align-items:center;gap:4px}
+.visit-today{background:#fef3c7;color:#92400e}
+.visit-upcoming{background:#eff6ff;color:#1e40af}
+.visit-overdue{background:#fef2f2;color:#991b1b}
+.no-visit{background:var(--bg);color:var(--t3)}
+.customer-card-actions{display:flex;gap:6px;margin-top:10px}
+
+/* ── CALENDAR VIEW ── */
+#view-calendar{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.cal-header{padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.cal-nav-btn{width:32px;height:32px;border:1.5px solid var(--bd);border-radius:8px;background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:all .15s}
+.cal-nav-btn:hover{background:var(--bg);border-color:var(--bd2)}
+.cal-month{font-size:15px;font-weight:700;flex:1;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:var(--surface);border-bottom:1px solid var(--bd);flex-shrink:0}
+.cal-day-header{text-align:center;font-size:11px;font-weight:700;color:var(--t3);padding:8px 0;text-transform:uppercase;letter-spacing:.5px}
+.cal-body{flex:1;overflow-y:auto}
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--bd)}
+.cal-cell{min-height:80px;border-right:1px solid var(--bd);padding:6px 5px;cursor:pointer;transition:background .1s;position:relative}
+.cal-cell:last-child{border-right:none}
+.cal-cell:hover{background:var(--bg)}
+.cal-cell.today .cal-date{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cal-cell.other-month .cal-date{color:var(--t3)}
+.cal-date{font-size:12px;font-weight:600;margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cal-visit-dot{font-size:10px;font-weight:600;padding:1px 5px;border-radius:6px;margin-bottom:2px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+
+/* ── LIST VIEW ── */
+#view-list{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.visit-item{background:var(--surface);border-radius:12px;border:1.5px solid var(--bd);padding:12px 14px;display:flex;align-items:flex-start;gap:12px;transition:border .15s}
+.visit-item.done{opacity:.6}
+.visit-item.done .visit-item-name{text-decoration:line-through}
+.visit-time-col{text-align:center;min-width:44px;flex-shrink:0}
+.visit-time{font-size:13px;font-weight:700;font-family:'Space Mono',monospace;color:var(--accent)}
+.visit-date-label{font-size:10px;color:var(--t3);margin-top:1px}
+.visit-item-name{font-size:14px;font-weight:700}
+.visit-item-desc{font-size:12px;color:var(--t2);margin-top:3px}
+.visit-item-meta{display:flex;align-items:center;gap:6px;margin-top:5px}
+.done-btn{width:26px;height:26px;border-radius:50%;border:2px solid var(--bd);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:all .15s}
+.done-btn.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.list-date-divider{font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;padding:8px 2px 4px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+
+
+/* ── CUSTOMER DETAIL PANEL ── */
+#detail-panel{width:0;overflow:hidden;background:var(--surface);border-left:1px solid var(--bd);flex-shrink:0;transition:width .25s ease;display:flex;flex-direction:column;z-index:10}
+#detail-panel.open{width:300px}
+.panel-top{padding:14px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.panel-title{font-size:15px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-close{width:28px;height:28px;border:none;background:none;cursor:pointer;color:var(--t2);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.panel-close:hover{background:var(--bg)}
+.panel-body{padding:14px;overflow-y:auto;flex:1}
+.d-field{margin-bottom:12px}
+.d-label{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+.d-val{font-size:13px;color:var(--text)}
+.panel-actions{padding:12px 14px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-shrink:0}
+
+/* ── FORMS ── */
+#form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:none}
+#form-overlay.show{display:block}
+#customer-form{position:fixed;top:0;right:-500px;width:min(460px,100vw);height:100%;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:601;display:flex;flex-direction:column;transition:right .25s cubic-bezier(.4,0,.2,1)}
+#customer-form.open{right:0}
+#visit-form{position:fixed;top:50%;left:50%;transform:translate(-50%,-60%);width:min(420px,95vw);background:var(--surface);border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.2);z-index:602;display:none;flex-direction:column;max-height:90vh;overflow:hidden}
+#visit-form.show{display:flex;transform:translate(-50%,-50%)}
+.form-header{padding:16px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.form-title{font-size:15px;font-weight:700;flex:1}
+.form-close{width:28px;height:28px;border:none;background:none;cursor:pointer;color:var(--t2);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.form-close:hover{background:var(--bg)}
+.form-body{flex:1;overflow-y:auto;padding:18px}
+.form-footer{padding:14px 18px;border-top:1px solid var(--bd);display:flex;gap:10px;flex-shrink:0}
+.f-group{margin-bottom:14px}
+.f-label{display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:5px}
+.req{color:#ef4444}
+.f-input,.f-select,.f-textarea{width:100%;padding:10px 12px;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);outline:none;transition:border .2s;-webkit-appearance:none}
+.f-input:focus,.f-select:focus,.f-textarea:focus{border-color:var(--accent);background:#fff}
+.f-textarea{resize:none;min-height:80px}
+.f-row{display:flex;gap:10px}
+.f-row .f-group{flex:1}
+.f-section{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin:16px 0 8px}
+.checkbox-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cb-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--bd);cursor:pointer;font-size:13px;transition:border .15s,background .15s}
+.cb-item:active{border-color:var(--accent);background:#eff6ff}
+.cb-item input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.avail-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.avail-day{display:flex;flex-direction:column;gap:3px}
+.avail-day-label{font-size:9px;font-weight:700;color:var(--t3);text-align:center;text-transform:uppercase}
+.avail-slot{height:28px;border-radius:6px;border:1.5px solid var(--bd);background:var(--bg);cursor:pointer;font-size:10px;font-weight:600;color:var(--t2);display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0 2px;text-align:center}
+.avail-slot.on{color:#fff;border-color:transparent}
+
+/* ── VISIT SCHEDULE FORM ── */
+.time-slots{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.time-slot{height:32px;padding:0 12px;border-radius:8px;border:1.5px solid var(--bd);background:var(--bg);cursor:pointer;font-size:12px;font-weight:600;color:var(--t2);display:flex;align-items:center;transition:all .15s}
+.time-slot.on{color:#fff;border-color:transparent}
+.recur-days{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.recur-day{height:32px;width:40px;border-radius:8px;border:1.5px solid var(--bd);background:var(--bg);cursor:pointer;font-size:11px;font-weight:700;color:var(--t2);display:flex;align-items:center;justify-content:center;transition:all .15s}
+.recur-day.on{color:#fff;border-color:transparent}
+
+/* ── BUTTONS ── */
+.btn{height:38px;padding:0 16px;border-radius:9px;font-size:13px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-danger{background:#fef2f2;color:#dc2626}
+.btn-ghost{background:var(--bg);color:var(--t2);border:1.5px solid var(--bd)}
+.btn-ghost:hover{background:var(--bd)}
+.btn-sm{height:30px;font-size:12px;padding:0 12px;border-radius:7px}
+.btn-full{flex:1;height:42px;font-size:14px}
+.btn-green{background:#0f9d6e;color:#fff}
+.btn-green:hover{filter:brightness(1.1)}
+
+/* ── CONFIRM DIALOG ── */
+#dlg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:none;align-items:center;justify-content:center}
+#dlg-overlay.show{display:flex}
+#dlg-box{background:#fff;border-radius:14px;padding:22px;width:min(300px,90vw);text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+#dlg-box h3{font-size:16px;font-weight:700;margin-bottom:8px}
+#dlg-box p{font-size:13px;color:var(--t2);margin-bottom:18px}
+.dlg-btns{display:flex;gap:8px}
+.dlg-btns button{flex:1;height:40px;border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;font-weight:700;border:none;cursor:pointer}
+#dlg-ok{background:#dc2626;color:#fff}
+#dlg-cancel{background:var(--bg);color:var(--t2)}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1d2e;color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;z-index:999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:60px 20px;color:var(--t3)}
+.empty svg{opacity:.25;margin-bottom:12px}
+.empty p{font-size:14px}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  #detail-panel{display:none}
+
+  .customer-card-actions{display:none}
+}
+@media(min-width:769px){
+  .view-tabs{padding:0 18px}
+}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <svg class="spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1558d6" stroke-width="2.5">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+  <div style="font-size:14px;color:#9aa0b4">Loading...</div>
+</div>
+
+<!-- PRODUCT SELECTOR -->
+<div id="product-selector">
+  <div style="font-size:40px">🐔</div>
+  <h1>CPF Sales CRM</h1>
+  <p>Kamphaeng Phet · Select your product team</p>
+  <div class="product-grid">
+    <div class="product-card" data-product="Chicken" onclick="selectProduct('Chicken')">
+      <span class="emoji">🐔</span>
+      <span class="name">Chicken</span>
+      <span class="count" id="pc-Chicken">0 customers</span>
+    </div>
+    <div class="product-card" data-product="Pork" onclick="selectProduct('Pork')">
+      <span class="emoji">🐷</span>
+      <span class="name">Pork</span>
+      <span class="count" id="pc-Pork">0 customers</span>
+    </div>
+    <div class="product-card" data-product="Shrimp" onclick="selectProduct('Shrimp')">
+      <span class="emoji">🦐</span>
+      <span class="name">Shrimp</span>
+      <span class="count" id="pc-Shrimp">0 customers</span>
+    </div>
+    <div class="product-card" data-product="Egg" onclick="selectProduct('Egg')">
+      <span class="emoji">🥚</span>
+      <span class="name">Egg</span>
+      <span class="count" id="pc-Egg">0 customers</span>
+    </div>
+  </div>
+  <button id="btn-enter-app" onclick="enterApp()">Enter →</button>
+  <button id="btn-all-view" onclick="enterApp(true)">View all teams</button>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar" style="display:none">
+  <button class="product-badge" id="active-badge" onclick="showProductSelector()">
+    <span class="badge-emoji" id="badge-emoji">🐔</span>
+    <span id="badge-name">Chicken</span>
+  </button>
+  <div id="search-wrap">
+    <input id="search-inp" type="text" placeholder="Search customers..." autocomplete="off" oninput="onSearch()">
+    <span class="search-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+  </div>
+  <div class="spacer"></div>
+  <button class="top-btn" onclick="openCustomerForm()" title="Add Customer">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="top-btn" onclick="refreshData()" title="Refresh">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+  </button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div id="main-content">
+    <!-- VIEW TABS -->
+    <div class="view-tabs">
+      <button class="view-tab active" id="tab-crm" onclick="switchView('crm')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Customers
+      </button>
+      <button class="view-tab" id="tab-calendar" onclick="switchView('calendar')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Calendar
+      </button>
+      <button class="view-tab" id="tab-list" onclick="switchView('list')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Visit List
+      </button>
+    </div>
+
+    <!-- CRM VIEW -->
+    <div id="view-crm" style="display:flex">
+      <div class="crm-header">
+        <div>
+          <div class="crm-title" id="crm-title">Customers</div>
+          <div class="crm-sub" id="crm-sub">Loading...</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openCustomerForm()">+ Add Customer</button>
+      </div>
+      <div id="customer-list"></div>
+    </div>
+
+    <!-- CALENDAR VIEW -->
+    <div id="view-calendar" style="display:none">
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calNav(-1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div class="cal-month" id="cal-month-label">—</div>
+        <button class="cal-nav-btn" onclick="calNav(1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openVisitForm()">+ Visit</button>
+      </div>
+      <div class="cal-grid" id="cal-day-headers"></div>
+      <div class="cal-body" id="cal-body"></div>
+    </div>
+
+    <!-- LIST VIEW -->
+    <div id="view-list" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-shrink:0">
+        <div>
+          <div style="font-size:16px;font-weight:800">Visit Schedule</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px" id="list-sub">Upcoming visits</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="setListFilter('upcoming')" id="lf-upcoming" style="border-color:var(--accent);color:var(--accent)">Upcoming</button>
+          <button class="btn btn-ghost btn-sm" onclick="setListFilter('all')" id="lf-all">All</button>
+        </div>
+      </div>
+      <div id="visit-list-el"></div>
+    </div>
+
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div id="detail-panel">
+    <div class="panel-top">
+      <div class="panel-title" id="dp-name">—</div>
+      <button class="panel-close" onclick="closeDetail()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="panel-body" id="dp-body"></div>
+    <div class="panel-actions">
+      <button class="btn btn-green btn-sm" onclick="openVisitForm(selectedId)" style="flex:1">+ Schedule Visit</button>
+      <button class="btn btn-ghost btn-sm" onclick="editCustomer(selectedId)">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCustomer(selectedId)">🗑</button>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMER FORM -->
+<div id="form-overlay" onclick="closeCustomerForm()"></div>
+<div id="customer-form">
+  <div class="form-header">
+    <div class="form-title" id="cf-title">Add Customer</div>
+    <button class="form-close" onclick="closeCustomerForm()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="form-body">
+    <div class="f-section">Customer Info</div>
+    <div class="f-group"><label class="f-label">Name <span class="req">*</span></label><input class="f-input" id="cf-name" type="text" placeholder="e.g. Somsak Market"></div>
+    <div class="f-row">
+      <div class="f-group"><label class="f-label">Channel <span class="req">*</span></label>
+        <select class="f-select" id="cf-channel">
+          <option value="">Select</option>
+          <option>Fresh Market</option><option>Fresh Shop</option><option>Restaurant</option><option>Street Stall</option><option>Factory</option>
+        </select>
+      </div>
+      <div class="f-group"><label class="f-label">Type</label>
+        <select class="f-select" id="cf-type"><option value="retail">Retail</option><option value="wholesale">Wholesale</option><option value="horeca">HoReCa</option></select>
+      </div>
+    </div>
+    <div class="f-group"><label class="f-label">Address / Zone</label><input class="f-input" id="cf-address" type="text" placeholder="e.g. Tesaban Rd., Zone 3"></div>
+    <div class="f-group"><label class="f-label">Phone</label><input class="f-input" id="cf-phone" type="tel" placeholder="08x-xxx-xxxx"></div>
+    <div class="f-group"><label class="f-label">Notes</label><textarea class="f-textarea" id="cf-notes" placeholder="Any relevant info..."></textarea></div>
+
+    <div class="f-section">Products</div>
+    <div class="checkbox-grid" id="cf-products"></div>
+
+    <div class="f-section">Customer Available Times</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:8px">Mark when this customer is available for visits</div>
+    <div class="avail-grid" id="cf-avail"></div>
+
+    <div class="f-section">Map Location</div>
+    <div id="cf-coords" style="display:none;background:#eff6ff;border-radius:8px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;color:#1558d6;margin-bottom:8px"></div>
+    <div style="font-size:11px;color:var(--t3)">📍 Location can be set from the Map tab after saving</div>
+
+  </div>
+  <div class="form-footer">
+    <button class="btn btn-ghost btn-full" onclick="closeCustomerForm()">Cancel</button>
+    <button class="btn btn-primary btn-full" onclick="saveCustomer()">💾 Save</button>
+  </div>
+</div>
+
+<!-- VISIT FORM -->
+<div id="visit-form">
+  <div class="form-header">
+    <div class="form-title" id="vf-title">Schedule Visit</div>
+    <button class="form-close" onclick="closeVisitForm()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="form-body">
+    <div class="f-group"><label class="f-label">Customer <span class="req">*</span></label>
+      <select class="f-select" id="vf-customer"></select>
+    </div>
+    <div class="f-row">
+      <div class="f-group"><label class="f-label">Start Date <span class="req">*</span></label><input class="f-input" id="vf-start" type="date"></div>
+      <div class="f-group"><label class="f-label">End Date</label><input class="f-input" id="vf-end" type="date" placeholder="Leave blank for ongoing"></div>
+    </div>
+    <div class="f-group">
+      <label class="f-label">Recurring Days (visits twice a week)</label>
+      <div class="recur-days" id="vf-days"></div>
+    </div>
+    <div class="f-group">
+      <label class="f-label">Visit Time</label>
+      <div class="time-slots" id="vf-times"></div>
+      <input class="f-input" id="vf-custom-time" type="time" style="margin-top:8px;max-width:140px">
+    </div>
+    <div class="f-group"><label class="f-label">Description / Purpose</label><textarea class="f-textarea" id="vf-desc" placeholder="e.g. Check stock levels, introduce new product line..."></textarea></div>
+  </div>
+  <div class="form-footer">
+    <button class="btn btn-ghost btn-full" onclick="closeVisitForm()">Cancel</button>
+    <button class="btn btn-primary btn-full" onclick="saveVisit()">Schedule</button>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div id="dlg-overlay">
+  <div id="dlg-box">
+    <h3>Confirm Delete</h3>
+    <p id="dlg-msg">Delete this item?</p>
+    <div class="dlg-btns">
+      <button id="dlg-cancel" onclick="closeDlg()">Cancel</button>
+      <button id="dlg-ok" onclick="doDlg()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const SUPABASE_URL='https://iqptignsnddkkuguwywok.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxcHRpZ25zbmRra3VndXd5d29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MzAwMTEsImV4cCI6MjA4NzQwNjAxMX0.N5hR24ney19RspUf-dahnakM57_4KzX2VSiTrJBEW-I';
+const PRODUCTS=['Chicken','Pork','Shrimp','Egg'];
+const PRODUCT_COLORS={Chicken:'#f59e0b',Pork:'#ef4444',Shrimp:'#f97316',Egg:'#84cc16'};
+const PRODUCT_EMOJI={Chicken:'🐔',Pork:'🐷',Shrimp:'🦐',Egg:'🥚'};
+const CHANNELS=['Fresh Market','Fresh Shop','Restaurant','Street Stall','Factory'];
+const CHANNEL_COLORS={'Fresh Market':'#0f9d6e','Fresh Shop':'#1558d6','Restaurant':'#e67e22','Street Stall':'#8e44ad','Factory':'#c0392b'};
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const TIME_SLOTS=['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00'];
+
+// ── STATE ───────────────────────────────────────────────
+let sb=null,customers=[],visits=[],visitCompletions={};
+let activeProduct=null,activeView='crm',selectedId=null,editCustomerId=null,editVisitId=null;
+let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
+let listFilter='upcoming';
+let dlgCb=null;
+
+// ── SUPABASE INIT ────────────────────────────────────────
+try{sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}catch(e){console.warn('Supabase init failed:',e);}
+
+// ── LOCAL STORAGE PERSISTENCE ────────────────────────────
+function saveToLocal(){
+  try{
+    localStorage.setItem('cpf_customers',JSON.stringify(customers));
+    localStorage.setItem('cpf_visits',JSON.stringify(visits));
+  }catch(e){}
+}
+function loadFromLocal(){
+  try{
+    const c=localStorage.getItem('cpf_customers');
+    const v=localStorage.getItem('cpf_visits');
+    if(c){customers=JSON.parse(c);}
+    if(v){visits=JSON.parse(v);}
+    return !!(c||v);
+  }catch(e){}
+  return false;
+}
+
+// ── DB HELPERS ───────────────────────────────────────────
+async function dbInit(){
+  if(!sb)return;
+  // Create tables if not exist
+  await sb.rpc('init_crm_tables').catch(()=>{});
+}
+async function loadAll(){
+  if(!sb){
+    if(!loadFromLocal()){customers=getSampleCustomers();visits=getSampleVisits();}
+    try{const c=localStorage.getItem('cpf_completions');if(c)visitCompletions=JSON.parse(c);}catch(e){}
+    return;
+  }
+  try{
+    const[cr,vr]=await Promise.all([
+      sb.from('crm_customers').select('*').order('name'),
+      sb.from('crm_visits').select('*').order('start_date')
+    ]);
+    if(!cr.error&&cr.data){
+      customers=cr.data.map(r=>({...r,products:r.products?r.products.split(',').filter(Boolean):[],availability:r.availability?JSON.parse(r.availability):{}}));
+      saveToLocal();
+    } else {
+      if(!loadFromLocal())customers=getSampleCustomers();
+    }
+    if(!vr.error&&vr.data){
+      visits=vr.data.map(r=>({...r,days:r.days?r.days.split(',').filter(Boolean):[]}));
+      saveToLocal();
+    } else {
+      if(!visits.length)visits=getSampleVisits();
+    }
+    // Load completions from localStorage
+    try{const c=localStorage.getItem('cpf_completions');if(c)visitCompletions=JSON.parse(c);}catch(e){}
+  }catch(e){
+    if(!loadFromLocal()){customers=getSampleCustomers();visits=getSampleVisits();}
+  }
+}
+async function saveCustomerDB(c){
+  if(!sb){showToast('✅ Saved locally');return;}
+  const row={...c,products:c.products.join(','),availability:JSON.stringify(c.availability||{})};
+  const{error}=await sb.from('crm_customers').upsert(row);
+  if(error)showToast('❌ '+error.message);else showToast('✅ Customer saved');
+}
+async function saveVisitDB(v){
+  if(!sb){showToast('✅ Saved locally');return;}
+  const row={...v,days:v.days.join(',')};
+  const{error}=await sb.from('crm_visits').upsert(row);
+  if(error)showToast('❌ '+error.message);else showToast('✅ Visit scheduled');
+}
+async function deleteCustomerDB(id){if(!sb)return;await sb.from('crm_customers').delete().eq('id',id);}
+async function deleteVisitDB(id){if(!sb)return;await sb.from('crm_visits').delete().eq('id',id);}
+
+// ── SAMPLE DATA ──────────────────────────────────────────
+function getSampleCustomers(){
+  return[
+    {id:'c1',name:'Tesaban Fresh Market',channel:'Fresh Market',type:'wholesale',address:'Ratchadamnoen Rd.',phone:'055-711-xxx',notes:'Main market, large orders',products:['Chicken','Pork','Egg'],lat:16.4794,lng:99.5221,availability:{Mon:['08:00','09:00'],Wed:['08:00','09:00'],Fri:['08:00']}},
+    {id:'c2',name:'Krua Mae Sao Restaurant',channel:'Restaurant',type:'horeca',address:'Soi 5 Phahon Yothin',phone:'',notes:'Weekly order Monday',products:['Chicken','Pork'],lat:16.4851,lng:99.5196,availability:{Tue:['10:00'],Thu:['10:00']}},
+    {id:'c3',name:'Nai Somchai Stall',channel:'Street Stall',type:'retail',address:'Thesa Rd.',phone:'082-xxx-xxxx',notes:'',products:['Pork','Shrimp'],lat:16.4775,lng:99.5188,availability:{Mon:['13:00'],Thu:['13:00']}},
+    {id:'c4',name:'KPP Processing Factory',channel:'Factory',type:'wholesale',address:'KPP-Sukhothai Rd.',phone:'055-720-xxx',notes:'Big orders',products:['Chicken','Shrimp'],lat:16.4870,lng:99.5270,availability:{Wed:['09:00'],Sat:['09:00']}},
+    {id:'c5',name:'Mini Mart Rim Tang',channel:'Fresh Shop',type:'retail',address:'Sawan Withi Rd.',phone:'',notes:'Low volume, follow up',products:['Egg','Chicken'],lat:16.4833,lng:99.5298,availability:{Tue:['14:00'],Fri:['14:00']}},
+    {id:'c6',name:'Mali Restaurant',channel:'Restaurant',type:'horeca',address:'Near Hospital',phone:'089-xxx-xxxx',notes:'',products:['Shrimp','Egg'],lat:16.4763,lng:99.5260,availability:{Mon:['11:00'],Thu:['11:00']}},
+  ];
+}
+function getSampleVisits(){
+  const today=new Date();const fmt=d=>d.toISOString().slice(0,10);
+  const addDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+  return[
+    {id:'v1',customer_id:'c1',product:'Chicken',days:['Mon','Wed'],start_date:fmt(today),end_date:fmt(addDays(today,60)),time:'08:00',description:'Check stock, propose weekly deal'},
+    {id:'v2',customer_id:'c2',product:'Chicken',days:['Tue','Thu'],start_date:fmt(today),end_date:fmt(addDays(today,60)),time:'10:00',description:'Restaurant visit - new menu consultation'},
+    {id:'v3',customer_id:'c3',product:'Pork',days:['Mon','Thu'],start_date:fmt(today),end_date:fmt(addDays(today,60)),time:'13:00',description:'Check pork supply'},
+    {id:'v4',customer_id:'c5',product:'Egg',days:['Tue','Fri'],start_date:fmt(today),end_date:fmt(addDays(today,60)),time:'14:00',description:'Egg delivery follow-up'},
+    {id:'v5',customer_id:'c6',product:'Shrimp',days:['Mon','Thu'],start_date:fmt(today),end_date:fmt(addDays(today,60)),time:'11:00',description:'Shrimp freshness check'},
+  ];
+}
+
+// ── PRODUCT SELECTOR ─────────────────────────────────────
+function selectProduct(p){
+  activeProduct=p;
+  document.querySelectorAll('.product-card').forEach(c=>{c.classList.toggle('selected',c.dataset.product===p);});
+  const btn=document.getElementById('btn-enter-app');
+  btn.style.display='block';
+  btn.style.background=PRODUCT_COLORS[p];
+  btn.textContent=`Enter as ${PRODUCT_EMOJI[p]} ${p} Team →`;
+  btn.style.color='#fff';
+}
+function updateProductCounts(){
+  PRODUCTS.forEach(p=>{
+    const el=document.getElementById('pc-'+p);
+    if(el)el.textContent=customers.filter(c=>c.products&&c.products.includes(p)).length+' customers';
+  });
+}
+function enterApp(all=false){
+  if(!all&&!activeProduct)return;
+  if(all)activeProduct=null;
+  document.getElementById('product-selector').style.display='none';
+  document.getElementById('topbar').style.display='flex';
+  document.getElementById('app').style.display='flex';
+  updateTopbarBadge();
+  render();
+}
+function showProductSelector(){
+  document.getElementById('product-selector').style.display='flex';
+  document.getElementById('topbar').style.display='none';
+  document.getElementById('app').style.display='none';
+}
+function updateTopbarBadge(){
+  const badge=document.getElementById('active-badge');
+  const emoji=document.getElementById('badge-emoji');
+  const name=document.getElementById('badge-name');
+  if(activeProduct){
+    badge.style.background=PRODUCT_COLORS[activeProduct];
+    emoji.textContent=PRODUCT_EMOJI[activeProduct];
+    name.textContent=activeProduct+' Team';
+    document.documentElement.style.setProperty('--accent',PRODUCT_COLORS[activeProduct]);
+  }else{
+    badge.style.background='#1558d6';
+    emoji.textContent='📊';
+    name.textContent='All Teams';
+    document.documentElement.style.setProperty('--accent','#1558d6');
+  }
+}
+
+// ── VIEW SWITCHING ───────────────────────────────────────
+function switchView(v){
+  activeView=v;
+  ['crm','calendar','list'].forEach(x=>{
+    document.getElementById('view-'+x).style.display='none';
+    document.getElementById('tab-'+x).classList.remove('active');
+  });
+  document.getElementById('view-'+v).style.display=v==='crm'?'flex':'block';
+  document.getElementById('tab-'+v).classList.add('active');
+  if(v==='calendar')renderCalendar();
+  if(v==='list')renderList();
+  if(v==='crm')renderCRM();
+}
+
+// ── RENDER ───────────────────────────────────────────────
+function getMyCustomers(q=''){
+  let cs=activeProduct?customers.filter(c=>c.products&&c.products.includes(activeProduct)):customers;
+  if(q)cs=cs.filter(c=>c.name.toLowerCase().includes(q)||( c.address||'').toLowerCase().includes(q));
+  return cs;
+}
+function getMyVisits(){
+  const myC=new Set(getMyCustomers().map(c=>c.id));
+  return visits.filter(v=>myC.has(v.customer_id)&&(!activeProduct||v.product===activeProduct));
+}
+function render(){updateProductCounts();renderCRM();}
+
+function renderCRM(){
+  const cs=getMyCustomers(document.getElementById('search-inp').value.toLowerCase());
+  const title=activeProduct?`${PRODUCT_EMOJI[activeProduct]} ${activeProduct} Team`:'All Teams';
+  document.getElementById('crm-title').textContent=title;
+  document.getElementById('crm-sub').textContent=`${cs.length} customers · ${getUpcomingVisitsToday().length} visits today`;
+  const el=document.getElementById('customer-list');
+  if(!cs.length){el.innerHTML=`<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-1a6 6 0 0 1 12 0v1"/></svg><p>No customers yet.<br>Add your first customer!</p></div>`;return;}
+  el.innerHTML=cs.map(c=>renderCustomerCard(c)).join('');
+}
+
+function renderCustomerCard(c){
+  const color=CHANNEL_COLORS[c.channel]||'#999';
+  const nextVisit=getNextVisit(c.id);
+  let visitChip='';
+  if(nextVisit){
+    const d=new Date(nextVisit.nextDate);const today=new Date();today.setHours(0,0,0,0);d.setHours(0,0,0,0);
+    const diff=Math.round((d-today)/(1000*60*60*24));
+    const key=`${nextVisit.id}_${nextVisit.nextDate}`;
+    const done=visitCompletions[key];
+    if(done)visitChip=`<span class="next-visit-chip" style="background:#f0fdf4;color:#16a34a">✅ Done ${nextVisit.nextDate}</span>`;
+    else if(diff===0)visitChip=`<span class="next-visit-chip visit-today">📅 Today ${nextVisit.time||''}</span>`;
+    else if(diff<0)visitChip=`<span class="next-visit-chip visit-overdue">⚠️ Overdue ${Math.abs(diff)}d</span>`;
+    else if(diff<=7)visitChip=`<span class="next-visit-chip visit-upcoming">📅 In ${diff}d · ${nextVisit.time||''}</span>`;
+    else visitChip=`<span class="next-visit-chip no-visit">📅 ${nextVisit.nextDate}</span>`;
+  }else{visitChip=`<span class="next-visit-chip no-visit">No visit scheduled</span>`;}
+  const prods=(c.products||[]).map(p=>`<span style="font-size:14px" title="${p}">${PRODUCT_EMOJI[p]||p}</span>`).join('');
+  return`<div class="customer-card" onclick="selectCustomer('${c.id}')">
+    <div class="customer-card-top">
+      <div class="customer-avatar" style="background:${color}22">${CHANNEL_COLORS[c.channel]?'🏪':'📍'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="customer-name">${c.name}</div>
+        <div class="customer-meta">
+          <span class="channel-badge" style="background:${color}">${c.channel}</span>
+          <span style="font-size:11px;color:var(--t3)">${c.type||'retail'}</span>
+          ${prods}
+        </div>
+        <div class="customer-addr">${c.address||'—'}</div>
+      </div>
+    </div>
+    <div class="visit-strip">${visitChip}</div>
+    <div class="customer-card-actions">
+      <button class="btn btn-green btn-sm" onclick="event.stopPropagation();openVisitForm('${c.id}')">+ Visit</button>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();editCustomer('${c.id}')">✏️ Edit</button>
+    </div>
+  </div>`;
+}
+
+// ── VISIT HELPERS ────────────────────────────────────────
+const DAY_IDX={Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6,Sun:0};
+function getNextVisit(customerId){
+  const now=new Date();now.setHours(0,0,0,0);
+  let best=null;
+  visits.filter(v=>v.customer_id===customerId).forEach(v=>{
+    const start=new Date(v.start_date);const end=v.end_date?new Date(v.end_date):new Date('2099-12-31');
+    if(!v.days||!v.days.length)return;
+    // Find next occurrence
+    for(let i=0;i<=60;i++){
+      const d=new Date(now);d.setDate(d.getDate()+i);
+      if(d<start||d>end)continue;
+      const dayName=DAYS[(d.getDay()+6)%7];// Mon=0
+      const dayName2=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      if(v.days.includes(dayName)||v.days.includes(dayName2)){
+        const candidate={...v,nextDate:d.toISOString().slice(0,10)};
+        if(!best||new Date(candidate.nextDate)<new Date(best.nextDate))best=candidate;
+        break;
+      }
+    }
+  });
+  return best;
+}
+function getUpcomingVisitsToday(){
+  const today=new Date();const todayStr=today.toISOString().slice(0,10);
+  const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][today.getDay()];
+  return getMyVisits().filter(v=>{
+    if(!v.days||!v.days.length)return false;
+    const start=new Date(v.start_date);const end=v.end_date?new Date(v.end_date):new Date('2099-12-31');
+    const t=new Date(todayStr);
+    return t>=start&&t<=end&&v.days.includes(dayName);
+  });
+}
+function getVisitsForDate(dateStr){
+  const d=new Date(dateStr);
+  const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  return getMyVisits().filter(v=>{
+    if(!v.days||!v.days.length)return false;
+    const start=new Date(v.start_date);const end=v.end_date?new Date(v.end_date):new Date('2099-12-31');
+    const t=new Date(dateStr);
+    return t>=start&&t<=end&&v.days.includes(dayName);
+  });
+}
+
+// ── CALENDAR ─────────────────────────────────────────────
+function calNav(dir){calMonth+=dir;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
+function renderCalendar(){
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-month-label').textContent=`${months[calMonth]} ${calYear}`;
+  // Day headers
+  document.getElementById('cal-day-headers').innerHTML=DAYS.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+  // Weeks
+  const firstDay=new Date(calYear,calMonth,1);
+  let startDow=(firstDay.getDay()+6)%7;// Mon=0
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const daysInPrev=new Date(calYear,calMonth,0).getDate();
+  const todayStr=new Date().toISOString().slice(0,10);
+  let html='';let day=1-startDow;
+  for(let week=0;week<6;week++){
+    let hasDay=false;
+    let weekHtml='<div class="cal-week">';
+    for(let dow=0;dow<7;dow++){
+      const isCurrentMonth=day>=1&&day<=daysInMonth;
+      const displayDay=isCurrentMonth?day:(day<=0?daysInPrev+day:day-daysInMonth);
+      const dateStr=isCurrentMonth?`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`:'';
+      if(isCurrentMonth)hasDay=true;
+      const isToday=dateStr===todayStr;
+      const vsits=dateStr?getVisitsForDate(dateStr):[];
+      const dotsHtml=vsits.slice(0,3).map(v=>{
+        const c=customers.find(x=>x.id===v.customer_id);
+        const color=PRODUCT_COLORS[v.product]||'#999';
+        const key=`${v.id}_${dateStr}`;
+        const done=visitCompletions[key];
+        return`<div class="cal-visit-dot" style="background:${done?'#9ca3af':color};text-decoration:${done?'line-through':''}" onclick="event.stopPropagation();toggleDone('${v.id}','${dateStr}')" title="${c?.name||'?'} - ${v.time||''}">${c?.name?.slice(0,10)||'?'}</div>`;
+      }).join('');
+      weekHtml+=`<div class="cal-cell${isCurrentMonth?'':' other-month'}${isToday?' today':''}" onclick="${dateStr?`calDayClick('${dateStr}')`:''}">`
+        +`<div class="cal-date">${displayDay}</div>${dotsHtml}</div>`;
+      day++;
+    }
+    weekHtml+='</div>';
+    if(hasDay||week===0)html+=weekHtml;
+    if(!hasDay&&week>3)break;
+  }
+  document.getElementById('cal-body').innerHTML=html;
+}
+function calDayClick(dateStr){
+  const vs=getVisitsForDate(dateStr);
+  if(vs.length)showToast(`${vs.length} visit(s) on ${dateStr}`);
+}
+function toggleDone(visitId,dateStr){
+  const key=`${visitId}_${dateStr}`;
+  visitCompletions[key]=!visitCompletions[key];
+  try{localStorage.setItem('cpf_completions',JSON.stringify(visitCompletions));}catch(e){}
+  renderCalendar();renderList();renderCRM();
+  showToast(visitCompletions[key]?'✅ Marked as done':'↩️ Marked as pending');
+}
+
+// ── LIST VIEW ────────────────────────────────────────────
+function setListFilter(f){
+  listFilter=f;
+  document.getElementById('lf-upcoming').style.cssText=f==='upcoming'?`border-color:var(--accent);color:var(--accent)`:'';
+  document.getElementById('lf-all').style.cssText=f==='all'?`border-color:var(--accent);color:var(--accent)`:'';
+  renderList();
+}
+function renderList(){
+  const today=new Date();today.setHours(0,0,0,0);
+  // Generate occurrences for next 60 days
+  const occurrences=[];
+  getMyVisits().forEach(v=>{
+    const start=new Date(v.start_date);const end=v.end_date?new Date(v.end_date):new Date('2099-12-31');
+    const limit=new Date(today);limit.setDate(limit.getDate()+60);
+    for(let d=new Date(Math.max(today,start));d<=Math.min(end,limit);d.setDate(d.getDate()+1)){
+      const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      if(v.days&&v.days.includes(dayName)){
+        const ds=d.toISOString().slice(0,10);
+        const key=`${v.id}_${ds}`;
+        occurrences.push({visit:v,dateStr:ds,date:new Date(d),key,done:!!visitCompletions[key]});
+      }
+    }
+  });
+  occurrences.sort((a,b)=>a.date-b.date||(a.visit.time||'').localeCompare(b.visit.time||''));
+  const filtered=listFilter==='upcoming'?occurrences.filter(o=>!o.done&&o.date>=today):occurrences;
+  document.getElementById('list-sub').textContent=`${filtered.length} visit${filtered.length!==1?'s':''} ${listFilter==='upcoming'?'upcoming':'total'}`;
+  if(!filtered.length){document.getElementById('visit-list-el').innerHTML=`<div class="empty"><p>No visits ${listFilter==='upcoming'?'upcoming':'found'}.<br>Schedule visits from the Customers tab.</p></div>`;return;}
+  let lastDate='';let html='';
+  filtered.forEach(o=>{
+    const c=customers.find(x=>x.id===o.visit.customer_id);
+    const color=PRODUCT_COLORS[o.visit.product]||'#999';
+    if(o.dateStr!==lastDate){
+      const isToday=o.dateStr===new Date().toISOString().slice(0,10);
+      const d=new Date(o.dateStr);const dLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+      html+=`<div class="list-date-divider">${isToday?'📅 Today — ':''} ${dLabel}</div>`;
+      lastDate=o.dateStr;
+    }
+    html+=`<div class="visit-item${o.done?' done':''}">
+      <button class="done-btn${o.done?' done':''}" onclick="toggleDone('${o.visit.id}','${o.dateStr}')" title="Mark done">
+        ${o.done?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':''}
+      </button>
+      <div class="visit-time-col">
+        <div class="visit-time" style="color:${color}">${o.visit.time||'—'}</div>
+        <div class="visit-date-label">${PRODUCT_EMOJI[o.visit.product]||''}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="visit-item-name">${c?.name||'Unknown'}</div>
+        <div class="visit-item-desc">${o.visit.description||c?.address||'—'}</div>
+        <div class="visit-item-meta">
+          <span class="channel-badge" style="background:${CHANNEL_COLORS[c?.channel]||'#999'}">${c?.channel||'?'}</span>
+          ${c?.phone?`<span style="font-size:11px;color:var(--t3)">${c.phone}</span>`:''}
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="deleteVisitItem('${o.visit.id}')" style="flex-shrink:0">🗑</button>
+    </div>`;
+  });
+  document.getElementById('visit-list-el').innerHTML=html;
+}
+
+
+// ── CUSTOMER DETAIL ──────────────────────────────────────
+function selectCustomer(id){
+  selectedId=id;const c=customers.find(x=>x.id===id);if(!c)return;
+  // Detail panel
+  const color=CHANNEL_COLORS[c.channel]||'#999';
+  document.getElementById('dp-name').textContent=c.name;
+  const vs=visits.filter(v=>v.customer_id===id);
+  const nextV=getNextVisit(id);
+  document.getElementById('dp-body').innerHTML=`
+    <div class="d-field"><div class="d-label">Channel</div><span class="channel-badge" style="background:${color};display:inline-block">${c.channel}</span></div>
+    <div class="d-field"><div class="d-label">Type</div><div class="d-val">${c.type||'retail'}</div></div>
+    ${c.address?`<div class="d-field"><div class="d-label">Address</div><div class="d-val">${c.address}</div></div>`:''}
+    ${c.phone?`<div class="d-field"><div class="d-label">Phone</div><div class="d-val">${c.phone}</div></div>`:''}
+    <div class="d-field"><div class="d-label">Products</div><div class="d-val">${(c.products||[]).map(p=>`${PRODUCT_EMOJI[p]} ${p}`).join(', ')||'—'}</div></div>
+    ${c.notes?`<div class="d-field"><div class="d-label">Notes</div><div class="d-val">${c.notes}</div></div>`:''}
+    <div class="d-field"><div class="d-label">Next Visit</div><div class="d-val" style="font-weight:600;color:var(--accent)">${nextV?`${nextV.nextDate} at ${nextV.time||'—'}`:' None scheduled'}</div></div>
+    <div class="d-field"><div class="d-label">Active Schedules</div><div class="d-val">${vs.length} schedule(s)</div></div>
+    ${c.lat!=null?`<div class="d-field"><div class="d-label">GPS</div><div class="d-val" style="font-family:'Space Mono',monospace;font-size:11px">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div><a href="https://maps.google.com/?q=${c.lat},${c.lng}" target="_blank" style="font-size:12px;color:var(--accent)">Open in Google Maps ↗</a></div>`:''}`;
+  document.getElementById('detail-panel').classList.add('open');
+}
+function closeDetail(){document.getElementById('detail-panel').classList.remove('open');selectedId=null;renderCRM();}
+
+// ── CUSTOMER FORM ────────────────────────────────────────
+function buildCFProducts(){
+  document.getElementById('cf-products').innerHTML=PRODUCTS.map(p=>`
+    <label class="cb-item"><input type="checkbox" value="${p}" id="cfp-${p}">${PRODUCT_EMOJI[p]} ${p}</label>`).join('');
+  // Pre-check active product
+  if(activeProduct){const cb=document.getElementById('cfp-'+activeProduct);if(cb)cb.checked=true;}
+}
+function buildCFAvail(){
+  const slots=['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00'];
+  document.getElementById('cf-avail').innerHTML=DAYS.map(d=>`
+    <div class="avail-day">
+      <div class="avail-day-label">${d}</div>
+      ${slots.map(t=>`<div class="avail-slot" data-day="${d}" data-time="${t}" onclick="toggleAvail(this)">${t.slice(0,5)}</div>`).join('')}
+    </div>`).join('');
+}
+function toggleAvail(el){
+  el.classList.toggle('on');
+  if(el.classList.contains('on'))el.style.background=activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6';
+  else el.style.background='';
+}
+function openCustomerForm(id=null){
+  editCustomerId=id;
+  document.getElementById('cf-title').textContent=id?'Edit Customer':'Add Customer';
+  document.getElementById('form-overlay').classList.add('show');
+  document.getElementById('customer-form').classList.add('open');
+  const c=id?customers.find(x=>x.id===id):null;
+  document.getElementById('cf-name').value=c?.name||'';
+  document.getElementById('cf-channel').value=c?.channel||'';
+  document.getElementById('cf-type').value=c?.type||'retail';
+  document.getElementById('cf-address').value=c?.address||'';
+  document.getElementById('cf-phone').value=c?.phone||'';
+  document.getElementById('cf-notes').value=c?.notes||'';
+  // Reset coords box
+  const coordBox=document.getElementById('cf-coords');
+  if(c?.lat!=null){coordBox.style.display='block';coordBox.textContent=`${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`;}
+  else{coordBox.style.display='none';coordBox.textContent='';}
+  buildCFProducts();buildCFAvail();
+  // Set product checkboxes
+  if(c?.products){c.products.forEach(p=>{const cb=document.getElementById('cfp-'+p);if(cb)cb.checked=true;});}
+  // Set availability
+  if(c?.availability){Object.entries(c.availability).forEach(([day,times])=>{times.forEach(t=>{const el=document.querySelector(`.avail-slot[data-day="${day}"][data-time="${t}"]`);if(el){el.classList.add('on');el.style.background=activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6';}});});}
+  setTimeout(()=>document.getElementById('cf-name').focus(),300);
+}
+function closeCustomerForm(){
+  document.getElementById('form-overlay').classList.remove('show');
+  document.getElementById('customer-form').classList.remove('open');
+  editCustomerId=null;
+}
+async function saveCustomer(){
+  const name=document.getElementById('cf-name').value.trim();
+  const channel=document.getElementById('cf-channel').value;
+  if(!name){showToast('❌ Name is required');return;}
+  if(!channel){showToast('❌ Channel is required');return;}
+  const products=[...document.querySelectorAll('#cf-products input:checked')].map(cb=>cb.value);
+  // Availability
+  const availability={};
+  document.querySelectorAll('.avail-slot.on').forEach(el=>{
+    const d=el.dataset.day,t=el.dataset.time;
+    if(!availability[d])availability[d]=[];
+    availability[d].push(t);
+  });
+  // Get coords from the coords display box
+  let lat=null,lng=null;
+  const coordBox=document.getElementById('cf-coords');
+  if(coordBox&&coordBox.style.display!=='none'&&coordBox.textContent.includes(',')){
+    const parts=coordBox.textContent.split(',').map(s=>parseFloat(s.trim()));
+    if(parts.length===2&&!isNaN(parts[0])&&!isNaN(parts[1])){lat=parts[0];lng=parts[1];}
+  }
+  // Also check existing customer coords if editing
+  if(lat===null&&editCustomerId){const existing=customers.find(x=>x.id===editCustomerId);if(existing){lat=existing.lat;lng=existing.lng;}}
+  const c={id:editCustomerId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,channel,type:document.getElementById('cf-type').value,address:document.getElementById('cf-address').value.trim(),phone:document.getElementById('cf-phone').value.trim(),notes:document.getElementById('cf-notes').value.trim(),products,availability,lat,lng};
+  if(editCustomerId){const i=customers.findIndex(x=>x.id===editCustomerId);if(i>=0)customers[i]=c;}
+  else customers.push(c);
+  saveToLocal();
+  closeCustomerForm();render();
+  await saveCustomerDB(c);
+}
+function editCustomer(id){openCustomerForm(id);}
+function deleteCustomer(id){
+  const c=customers.find(x=>x.id===id);
+  showDlg(`Delete "${c?.name||'this customer'}"?`,async()=>{
+    await deleteCustomerDB(id);
+    customers=customers.filter(x=>x.id!==id);
+    visits=visits.filter(v=>v.customer_id!==id);
+    // Clean up visit completions for this customer
+    Object.keys(visitCompletions).forEach(k=>{
+      const vId=k.split('_')[0];
+      if(visits.findIndex(v=>v.id===vId)<0)delete visitCompletions[k];
+    });
+    saveToLocal();
+    try{localStorage.setItem('cpf_completions',JSON.stringify(visitCompletions));}catch(e){}
+    if(selectedId===id)closeDetail();
+    render();showToast('✅ Customer deleted');
+  });
+}
+
+// ── VISIT FORM ───────────────────────────────────────────
+function buildVFDays(selected=[]){
+  document.getElementById('vf-days').innerHTML=DAYS.map(d=>`
+    <div class="recur-day${selected.includes(d)?' on':''}" data-day="${d}" onclick="toggleRecurDay(this)" style="${selected.includes(d)?`background:${activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6'};color:#fff`:''}">${d}</div>`).join('');
+}
+function toggleRecurDay(el){
+  el.classList.toggle('on');
+  el.style.background=el.classList.contains('on')?(activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6'):'';
+  el.style.color=el.classList.contains('on')?'#fff':'';
+}
+function buildVFTimes(selected=''){
+  document.getElementById('vf-times').innerHTML=TIME_SLOTS.map(t=>`
+    <div class="time-slot${t===selected?' on':''}" onclick="selectTimeSlot(this,'${t}')" style="${t===selected?`background:${activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6'};color:#fff`:''}">${t}</div>`).join('');
+}
+function selectTimeSlot(el,t){
+  document.querySelectorAll('.time-slot').forEach(s=>{s.classList.remove('on');s.style.background='';s.style.color='';});
+  el.classList.add('on');el.style.background=activeProduct?PRODUCT_COLORS[activeProduct]:'#1558d6';el.style.color='#fff';
+  document.getElementById('vf-custom-time').value=t;
+}
+function openVisitForm(customerId=null){
+  editVisitId=null;
+  document.getElementById('vf-title').textContent='Schedule Visit';
+  // Populate customer dropdown
+  const cs=getMyCustomers();
+  document.getElementById('vf-customer').innerHTML=cs.map(c=>`<option value="${c.id}"${c.id===customerId?' selected':''}>${c.name}</option>`).join('');
+  // Default dates
+  const today=new Date().toISOString().slice(0,10);
+  const end=new Date();end.setMonth(end.getMonth()+2);
+  document.getElementById('vf-start').value=today;
+  document.getElementById('vf-end').value=end.toISOString().slice(0,10);
+  // Suggest 2 days based on customer availability
+  let suggestedDays=[];
+  if(customerId){
+    const c=customers.find(x=>x.id===customerId);
+    if(c?.availability)suggestedDays=Object.keys(c.availability).slice(0,2);
+  }
+  if(!suggestedDays.length)suggestedDays=['Mon','Thu'];
+  buildVFDays(suggestedDays);
+  buildVFTimes('');
+  document.getElementById('vf-desc').value='';
+  document.getElementById('visit-form').classList.add('show');
+}
+function closeVisitForm(){document.getElementById('visit-form').classList.remove('show');editVisitId=null;}
+async function saveVisit(){
+  const custId=document.getElementById('vf-customer').value;
+  const startDate=document.getElementById('vf-start').value;
+  if(!custId){showToast('❌ Select a customer');return;}
+  if(!startDate){showToast('❌ Start date required');return;}
+  const days=[...document.querySelectorAll('.recur-day.on')].map(el=>el.dataset.day);
+  if(days.length===0){showToast('❌ Select at least one day');return;}
+  const time=document.getElementById('vf-custom-time').value||document.querySelector('.time-slot.on')?.textContent||'';
+  const v={id:editVisitId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),customer_id:custId,product:activeProduct||'Chicken',days,start_date:startDate,end_date:document.getElementById('vf-end').value||null,time,description:document.getElementById('vf-desc').value.trim()};
+  if(editVisitId){const i=visits.findIndex(x=>x.id===editVisitId);if(i>=0)visits[i]=v;}
+  else visits.push(v);
+  saveToLocal();
+  closeVisitForm();render();renderCalendar();renderList();
+  await saveVisitDB(v);
+}
+function deleteVisitItem(id){
+  showDlg('Delete this visit schedule?',async()=>{
+    await deleteVisitDB(id);visits=visits.filter(v=>v.id!==id);
+    saveToLocal();
+    render();renderCalendar();renderList();showToast('Visit deleted');
+  });
+}
+
+// ── SEARCH ───────────────────────────────────────────────
+function onSearch(){render();}
+
+// ── REFRESH ──────────────────────────────────────────────
+async function refreshData(){showToast('🔄 Refreshing...');await loadAll();render();updateProductCounts();showToast('✅ Refreshed');}
+
+// ── CONFIRM DIALOG ───────────────────────────────────────
+function showDlg(msg,cb){document.getElementById('dlg-msg').textContent=msg;document.getElementById('dlg-overlay').classList.add('show');dlgCb=cb;}
+function doDlg(){closeDlg();if(dlgCb){dlgCb();dlgCb=null;}}
+function closeDlg(){document.getElementById('dlg-overlay').classList.remove('show');dlgCb=null;}
+
+// ── TOAST ────────────────────────────────────────────────
+function showToast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+
+// ── BOOT ─────────────────────────────────────────────────
+async function init(){
+  await loadAll();
+  updateProductCounts();
+  // Build calendar day headers
+  document.getElementById('cal-day-headers').innerHTML=DAYS.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+  document.getElementById('loading').style.display='none';
+}
+init();
+</script>
+</body>
+</html>
