@@ -401,10 +401,6 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;color:var(-
     <div style="font-size:11px;color:var(--t3);margin-bottom:8px">Mark when this customer is available for visits</div>
     <div class="avail-grid" id="cf-avail"></div>
 
-    <div class="f-section">Map Location</div>
-    <div id="cf-coords" style="display:none;background:#eff6ff;border-radius:8px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;color:#1558d6;margin-bottom:8px"></div>
-    <div style="font-size:11px;color:var(--t3)">📍 Location can be set from the Map tab after saving</div>
-
   </div>
   <div class="form-footer">
     <button class="btn btn-ghost btn-full" onclick="closeCustomerForm()">Cancel</button>
@@ -535,19 +531,43 @@ async function loadAll(){
   }
 }
 async function saveCustomerDB(c){
-  if(!sb){showToast('✅ Saved locally');return;}
-  const row={...c,products:c.products.join(','),availability:JSON.stringify(c.availability||{})};
-  const{error}=await sb.from('crm_customers').upsert(row);
-  if(error)showToast('❌ '+error.message);else showToast('✅ Customer saved');
+  try{ localStorage.setItem('cpf_customers', JSON.stringify(customers)); }catch(e){}
+  if(!sb){ showToast('✅ Saved (offline)'); return; }
+  const row={
+    id: c.id, name: c.name, channel: c.channel, type: c.type||'retail',
+    address: c.address||'', phone: c.phone||'', notes: c.notes||'',
+    products: (c.products||[]).join(','),
+    availability: JSON.stringify(c.availability||{})
+  };
+  const{data,error}=await sb.from('crm_customers').upsert(row).select();
+  if(error){ console.error('saveCustomer error:', error); showToast('❌ '+error.message); }
+  else{ showToast('✅ Customer saved'); }
 }
 async function saveVisitDB(v){
-  if(!sb){showToast('✅ Saved locally');return;}
-  const row={...v,days:v.days.join(',')};
-  const{error}=await sb.from('crm_visits').upsert(row);
-  if(error)showToast('❌ '+error.message);else showToast('✅ Visit scheduled');
+  try{ localStorage.setItem('cpf_visits', JSON.stringify(visits)); }catch(e){}
+  if(!sb){ showToast('✅ Saved (offline)'); return; }
+  const row={
+    id: v.id, customer_id: v.customer_id, product: v.product||'',
+    days: (v.days||[]).join(','),
+    start_date: v.start_date, end_date: v.end_date||null,
+    time: v.time||'', description: v.description||''
+  };
+  const{error}=await sb.from('crm_visits').upsert(row).select();
+  if(error){ console.error('saveVisit error:', error); showToast('❌ '+error.message); }
+  else{ showToast('✅ Visit scheduled'); }
 }
-async function deleteCustomerDB(id){if(!sb)return;await sb.from('crm_customers').delete().eq('id',id);}
-async function deleteVisitDB(id){if(!sb)return;await sb.from('crm_visits').delete().eq('id',id);}
+async function deleteCustomerDB(id){
+  try{ localStorage.setItem('cpf_customers', JSON.stringify(customers)); }catch(e){}
+  if(!sb)return;
+  const{error}=await sb.from('crm_customers').delete().eq('id',id);
+  if(error){ console.error('deleteCustomer error:', error); showToast('❌ '+error.message); }
+}
+async function deleteVisitDB(id){
+  try{ localStorage.setItem('cpf_visits', JSON.stringify(visits)); }catch(e){}
+  if(!sb)return;
+  const{error}=await sb.from('crm_visits').delete().eq('id',id);
+  if(error){ console.error('deleteVisit error:', error); showToast('❌ '+error.message); }
+}
 
 // ── SAMPLE DATA ──────────────────────────────────────────
 function getSampleCustomers(){
@@ -851,8 +871,9 @@ function renderList(){
 
 // ── CUSTOMER DETAIL ──────────────────────────────────────
 function selectCustomer(id){
-  selectedId=id;const c=customers.find(x=>x.id===id);if(!c)return;
-  // Detail panel
+  selectedId=id;
+  const c=customers.find(x=>x.id===id);
+  if(!c)return;
   const color=CHANNEL_COLORS[c.channel]||'#999';
   document.getElementById('dp-name').textContent=c.name;
   const vs=visits.filter(v=>v.customer_id===id);
@@ -864,9 +885,8 @@ function selectCustomer(id){
     ${c.phone?`<div class="d-field"><div class="d-label">Phone</div><div class="d-val">${c.phone}</div></div>`:''}
     <div class="d-field"><div class="d-label">Products</div><div class="d-val">${(c.products||[]).map(p=>`${PRODUCT_EMOJI[p]} ${p}`).join(', ')||'—'}</div></div>
     ${c.notes?`<div class="d-field"><div class="d-label">Notes</div><div class="d-val">${c.notes}</div></div>`:''}
-    <div class="d-field"><div class="d-label">Next Visit</div><div class="d-val" style="font-weight:600;color:var(--accent)">${nextV?`${nextV.nextDate} at ${nextV.time||'—'}`:' None scheduled'}</div></div>
-    <div class="d-field"><div class="d-label">Active Schedules</div><div class="d-val">${vs.length} schedule(s)</div></div>
-    ${c.lat!=null?`<div class="d-field"><div class="d-label">GPS</div><div class="d-val" style="font-family:'Space Mono',monospace;font-size:11px">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div><a href="https://maps.google.com/?q=${c.lat},${c.lng}" target="_blank" style="font-size:12px;color:var(--accent)">Open in Google Maps ↗</a></div>`:''}`;
+    <div class="d-field"><div class="d-label">Next Visit</div><div class="d-val" style="font-weight:600;color:var(--accent)">${nextV?nextV.nextDate+' at '+(nextV.time||'—'):'None scheduled'}</div></div>
+    <div class="d-field"><div class="d-label">Active Schedules</div><div class="d-val">${vs.length} schedule(s)</div></div>`;
   document.getElementById('detail-panel').classList.add('open');
 }
 function closeDetail(){document.getElementById('detail-panel').classList.remove('open');selectedId=null;renderCRM();}
@@ -903,10 +923,6 @@ function openCustomerForm(id=null){
   document.getElementById('cf-address').value=c?.address||'';
   document.getElementById('cf-phone').value=c?.phone||'';
   document.getElementById('cf-notes').value=c?.notes||'';
-  // Reset coords box
-  const coordBox=document.getElementById('cf-coords');
-  if(c?.lat!=null){coordBox.style.display='block';coordBox.textContent=`${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`;}
-  else{coordBox.style.display='none';coordBox.textContent='';}
   buildCFProducts();buildCFAvail();
   // Set product checkboxes
   if(c?.products){c.products.forEach(p=>{const cb=document.getElementById('cfp-'+p);if(cb)cb.checked=true;});}
@@ -925,45 +941,47 @@ async function saveCustomer(){
   if(!name){showToast('❌ Name is required');return;}
   if(!channel){showToast('❌ Channel is required');return;}
   const products=[...document.querySelectorAll('#cf-products input:checked')].map(cb=>cb.value);
-  // Availability
   const availability={};
   document.querySelectorAll('.avail-slot.on').forEach(el=>{
     const d=el.dataset.day,t=el.dataset.time;
     if(!availability[d])availability[d]=[];
     availability[d].push(t);
   });
-  // Get coords from the coords display box
-  let lat=null,lng=null;
-  const coordBox=document.getElementById('cf-coords');
-  if(coordBox&&coordBox.style.display!=='none'&&coordBox.textContent.includes(',')){
-    const parts=coordBox.textContent.split(',').map(s=>parseFloat(s.trim()));
-    if(parts.length===2&&!isNaN(parts[0])&&!isNaN(parts[1])){lat=parts[0];lng=parts[1];}
+  const id=editCustomerId||Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  const c={
+    id, name, channel,
+    type: document.getElementById('cf-type').value,
+    address: document.getElementById('cf-address').value.trim(),
+    phone: document.getElementById('cf-phone').value.trim(),
+    notes: document.getElementById('cf-notes').value.trim(),
+    products, availability
+  };
+  if(editCustomerId){
+    const i=customers.findIndex(x=>x.id===editCustomerId);
+    if(i>=0) customers[i]=c;
+    else customers.push(c);
+  } else {
+    customers.push(c);
   }
-  // Also check existing customer coords if editing
-  if(lat===null&&editCustomerId){const existing=customers.find(x=>x.id===editCustomerId);if(existing){lat=existing.lat;lng=existing.lng;}}
-  const c={id:editCustomerId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,channel,type:document.getElementById('cf-type').value,address:document.getElementById('cf-address').value.trim(),phone:document.getElementById('cf-phone').value.trim(),notes:document.getElementById('cf-notes').value.trim(),products,availability,lat,lng};
-  if(editCustomerId){const i=customers.findIndex(x=>x.id===editCustomerId);if(i>=0)customers[i]=c;}
-  else customers.push(c);
-  saveToLocal();
-  closeCustomerForm();render();
+  closeCustomerForm();
+  render();
   await saveCustomerDB(c);
 }
 function editCustomer(id){openCustomerForm(id);}
 function deleteCustomer(id){
   const c=customers.find(x=>x.id===id);
-  showDlg(`Delete "${c?.name||'this customer'}"?`,async()=>{
-    await deleteCustomerDB(id);
+  if(!c){showToast('❌ Customer not found');return;}
+  showDlg(`Delete "${c.name}"?`,async()=>{
+    // Remove from local state first so UI updates instantly
     customers=customers.filter(x=>x.id!==id);
     visits=visits.filter(v=>v.customer_id!==id);
-    // Clean up visit completions for this customer
-    Object.keys(visitCompletions).forEach(k=>{
-      const vId=k.split('_')[0];
-      if(visits.findIndex(v=>v.id===vId)<0)delete visitCompletions[k];
-    });
-    saveToLocal();
-    try{localStorage.setItem('cpf_completions',JSON.stringify(visitCompletions));}catch(e){}
-    if(selectedId===id)closeDetail();
-    render();showToast('✅ Customer deleted');
+    try{ localStorage.setItem('cpf_customers', JSON.stringify(customers)); }catch(e){}
+    try{ localStorage.setItem('cpf_visits', JSON.stringify(visits)); }catch(e){}
+    if(selectedId===id) closeDetail();
+    render();
+    showToast('✅ Customer deleted');
+    // Then sync to Supabase
+    await deleteCustomerDB(id);
   });
 }
 
